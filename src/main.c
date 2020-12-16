@@ -1,36 +1,11 @@
 #include <gtk/gtk.h>
-#include <string.h>
-#include "constant.c"
 #include <gdk/gdkkeysyms.h>
+#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#define ENTER_KEY 65293
-
-typedef struct
-{
-    GtkWidget *textview_main; // Pointer to text view object
-    GtkWidget *test;
-    GtkTextBuffer *textbuffer_main; // Pointer to text buffer
-    GtkEntry *textentry_main;       // Pointer to text entry
-} app_widgets;
-
-void add_text(char *dest, const char *src)
-{
-    char command[256];
-    strcpy(command, dest);
-    strcat(command, src);
-    strcpy(dest, command);
-}
-
-void set_username()
-{
-    char *buf;
-    buf = (char *)malloc(10 * sizeof(char));
-    buf = getlogin();
-    strcpy(username_c, buf);
-    strcat(username_c, "@desktop: ");
-}
+#include "constant.c"
+#include "main.h"
 
 int main(int argc, char *argv[])
 {
@@ -53,9 +28,10 @@ int main(int argc, char *argv[])
 
     // Color tags
     gtk_text_buffer_create_tag(widgets->textbuffer_main, "dir_bg",
-                               "background", "#a042e5", NULL);
+                               "foreground", "#a042e5", NULL);
     gtk_text_buffer_create_tag(widgets->textbuffer_main, "user_fg",
                                "foreground", "#00a6ff", NULL);
+
     gtk_builder_connect_signals(builder, widgets);
 
     g_object_unref(builder);
@@ -69,20 +45,40 @@ int main(int argc, char *argv[])
 
     return 0;
 }
-
+void add_text(char *dest, const char *src)
+{
+    char command[256];
+    strcpy(command, dest);
+    strcat(command, src);
+    strcpy(dest, command);
+}
+// set the user and host name
+void set_username()
+{
+    char *buf, hostname[128];
+    hostname[127] = '\0';
+    buf = (char *)malloc(10 * sizeof(char));
+    buf = getlogin();
+    gethostname(hostname, 127);
+    strcpy(username_c, buf);
+    strcat(username_c, "@");
+    strcat(username_c, hostname);
+    strcat(username_c, ": ");
+}
 // called when window is closed
 void on_window_main_destroy()
 {
     gtk_main_quit();
 }
 
+// main method, to take the commands
 void on_textentry_main_key_release_event(GtkWidget *widget, GdkEvent *event, app_widgets *app_wdgts)
 {
     GdkEventKey eventKey;
     GtkTextIter iter;
     eventKey = event->key;
     int found = 0;
-    if (eventKey.keyval == GDK_KEY_Return)
+    if (eventKey.keyval == GDK_KEY_Return || eventKey.keyval == GDK_KEY_KP_Enter)
     {
 
         const char *txt = gtk_entry_get_text(app_wdgts->textentry_main);

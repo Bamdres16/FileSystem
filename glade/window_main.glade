@@ -46,6 +46,7 @@
           <object class="GtkEntry" id="textentry_main">
             <property name="visible">True</property>
             <property name="can_focus">True</property>
+            <property name="placeholder_text" translatable="yes">Command</property>
             <property name="input_purpose">terminal</property>
             <signal name="key-release-event" handler="on_textentry_main_key_release_event" swapped="no"/>
           </object>
