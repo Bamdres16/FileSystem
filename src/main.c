@@ -39,15 +39,15 @@ int main(int argc, char *argv[])
     widgets->test = GTK_WIDGET(gtk_builder_get_object(builder, "test"));
 
     // Color tags
-    gtk_text_buffer_create_tag(widgets->textbuffer_main, "green_bg",
-                               "background", "blue", NULL);
-    gtk_text_buffer_create_tag(widgets->textbuffer_main, "blue_fg",
-                               "foreground", "green", NULL);
+    gtk_text_buffer_create_tag(widgets->textbuffer_main, "dir_bg",
+                               "background", "#a042e5", NULL);
+    gtk_text_buffer_create_tag(widgets->textbuffer_main, "user_fg",
+                               "foreground", "#00a6ff", NULL);
     gtk_builder_connect_signals(builder, widgets);
 
     g_object_unref(builder);
     gtk_text_buffer_get_iter_at_offset(widgets->textbuffer_main, &iter, -1);
-    gtk_text_buffer_insert_with_tags_by_name(widgets->textbuffer_main, &iter, "brayan@terminal: ", -1, "blue_fg", NULL, NULL);
+    gtk_text_buffer_insert_with_tags_by_name(widgets->textbuffer_main, &iter, "brayan@terminal: ", -1, "user_fg", NULL, NULL);
 
     gtk_widget_show(window);
     gtk_main();
@@ -93,9 +93,9 @@ void on_textentry_main_key_release_event(GtkWidget *widget, GdkEvent *event, app
                     add_text(complete, "\n");
                     gtk_text_buffer_get_iter_at_offset(app_wdgts->textbuffer_main, &iter, -1);
                     gtk_text_buffer_insert_with_tags_by_name(app_wdgts->textbuffer_main, &iter,
-                                                             complete, -1, "green_bg", NULL, NULL);
+                                                             complete, -1, "dir_bg", NULL, NULL);
                     gtk_entry_set_text(app_wdgts->textentry_main, "");
-                    gtk_text_buffer_insert_with_tags_by_name(app_wdgts->textbuffer_main, &iter, "brayan@terminal: ", -1, "blue_fg", NULL, NULL);
+                    gtk_text_buffer_insert_with_tags_by_name(app_wdgts->textbuffer_main, &iter, "brayan@terminal: ", -1, "user_fg", NULL, NULL);
                 }
             }
             if (!found)
@@ -106,7 +106,7 @@ void on_textentry_main_key_release_event(GtkWidget *widget, GdkEvent *event, app
                 gtk_text_buffer_insert_at_cursor(app_wdgts->textbuffer_main, notFound, -1);
                 gtk_entry_set_text(app_wdgts->textentry_main, "");
                 gtk_text_buffer_get_iter_at_offset(app_wdgts->textbuffer_main, &iter, -1);
-                gtk_text_buffer_insert_with_tags_by_name(app_wdgts->textbuffer_main, &iter, "brayan@terminal: ", -1, "blue_fg", NULL, NULL);
+                gtk_text_buffer_insert_with_tags_by_name(app_wdgts->textbuffer_main, &iter, "brayan@terminal: ", -1, "user_fg", NULL, NULL);
             }
             else
             {
