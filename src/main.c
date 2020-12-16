@@ -2,6 +2,9 @@
 #include <string.h>
 #include "constant.c"
 #include <gdk/gdkkeysyms.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
 #define ENTER_KEY 65293
 
 typedef struct
@@ -20,8 +23,18 @@ void add_text(char *dest, const char *src)
     strcpy(dest, command);
 }
 
+void set_username()
+{
+    char *buf;
+    buf = (char *)malloc(10 * sizeof(char));
+    buf = getlogin();
+    strcpy(username_c, buf);
+    strcat(username_c, "@desktop: ");
+}
+
 int main(int argc, char *argv[])
 {
+    set_username();
     GtkBuilder *builder;
     GtkWidget *window;
     GtkTextIter iter;
@@ -47,7 +60,7 @@ int main(int argc, char *argv[])
 
     g_object_unref(builder);
     gtk_text_buffer_get_iter_at_offset(widgets->textbuffer_main, &iter, -1);
-    gtk_text_buffer_insert_with_tags_by_name(widgets->textbuffer_main, &iter, "brayan@terminal: ", -1, "user_fg", NULL, NULL);
+    gtk_text_buffer_insert_with_tags_by_name(widgets->textbuffer_main, &iter, username_c, -1, "user_fg", NULL, NULL);
 
     gtk_widget_show(window);
     gtk_main();
@@ -95,7 +108,7 @@ void on_textentry_main_key_release_event(GtkWidget *widget, GdkEvent *event, app
                     gtk_text_buffer_insert_with_tags_by_name(app_wdgts->textbuffer_main, &iter,
                                                              complete, -1, "dir_bg", NULL, NULL);
                     gtk_entry_set_text(app_wdgts->textentry_main, "");
-                    gtk_text_buffer_insert_with_tags_by_name(app_wdgts->textbuffer_main, &iter, "brayan@terminal: ", -1, "user_fg", NULL, NULL);
+                    gtk_text_buffer_insert_with_tags_by_name(app_wdgts->textbuffer_main, &iter, username_c, -1, "user_fg", NULL, NULL);
                 }
             }
             if (!found)
@@ -106,7 +119,7 @@ void on_textentry_main_key_release_event(GtkWidget *widget, GdkEvent *event, app
                 gtk_text_buffer_insert_at_cursor(app_wdgts->textbuffer_main, notFound, -1);
                 gtk_entry_set_text(app_wdgts->textentry_main, "");
                 gtk_text_buffer_get_iter_at_offset(app_wdgts->textbuffer_main, &iter, -1);
-                gtk_text_buffer_insert_with_tags_by_name(app_wdgts->textbuffer_main, &iter, "brayan@terminal: ", -1, "user_fg", NULL, NULL);
+                gtk_text_buffer_insert_with_tags_by_name(app_wdgts->textbuffer_main, &iter, username_c, -1, "user_fg", NULL, NULL);
             }
             else
             {
