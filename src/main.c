@@ -127,6 +127,7 @@ void on_textentry_main_key_release_event(GtkWidget *widget, GdkEvent *event, app
                     found = 1;
                     add_text(command, "\n");
                     add_text(complete, "\n");
+                    print_console(app_wdgts, "\n");
                     print_console_color(app_wdgts, complete, "dir_bg");
                     reset_entry(app_wdgts);
                     print_username(app_wdgts);
