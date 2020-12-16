@@ -1,7 +1,7 @@
 #include <gtk/gtk.h>
 #include <string.h>
 #include "constant.c"
-
+#include <gdk/gdkkeysyms.h>
 #define ENTER_KEY 65293
 
 typedef struct
@@ -24,6 +24,7 @@ int main(int argc, char *argv[])
 {
     GtkBuilder *builder;
     GtkWidget *window;
+    GtkTextIter iter;
     app_widgets *widgets = g_slice_new(app_widgets);
 
     gtk_init(&argc, &argv);
@@ -37,10 +38,16 @@ int main(int argc, char *argv[])
     widgets->textentry_main = GTK_ENTRY(gtk_builder_get_object(builder, "textentry_main"));
     widgets->test = GTK_WIDGET(gtk_builder_get_object(builder, "test"));
 
+    // Color tags
+    gtk_text_buffer_create_tag(widgets->textbuffer_main, "green_bg",
+                               "background", "blue", NULL);
+    gtk_text_buffer_create_tag(widgets->textbuffer_main, "blue_fg",
+                               "foreground", "green", NULL);
     gtk_builder_connect_signals(builder, widgets);
 
     g_object_unref(builder);
-    gtk_text_buffer_set_text(widgets->textbuffer_main, "brayan@terminal: ", -1);
+    gtk_text_buffer_get_iter_at_offset(widgets->textbuffer_main, &iter, -1);
+    gtk_text_buffer_insert_with_tags_by_name(widgets->textbuffer_main, &iter, "brayan@terminal: ", -1, "blue_fg", NULL, NULL);
 
     gtk_widget_show(window);
     gtk_main();
@@ -59,9 +66,10 @@ void on_window_main_destroy()
 void on_textentry_main_key_release_event(GtkWidget *widget, GdkEvent *event, app_widgets *app_wdgts)
 {
     GdkEventKey eventKey;
+    GtkTextIter iter;
     eventKey = event->key;
     int found = 0;
-    if (eventKey.keyval == ENTER_KEY)
+    if (eventKey.keyval == GDK_KEY_Return)
     {
 
         const char *txt = gtk_entry_get_text(app_wdgts->textentry_main);
@@ -70,6 +78,7 @@ void on_textentry_main_key_release_event(GtkWidget *widget, GdkEvent *event, app
             char command[256], complete[256];
             strcpy(command, txt);
             strcpy(complete, txt);
+
             for (int i = 0; i < MAX_COMMANDS; i++)
             {
                 char *token = strtok(command, " ");
@@ -82,18 +91,22 @@ void on_textentry_main_key_release_event(GtkWidget *widget, GdkEvent *event, app
                     found = 1;
                     add_text(command, "\n");
                     add_text(complete, "\n");
-                    gtk_text_buffer_insert_at_cursor(app_wdgts->textbuffer_main, complete, -1);
+                    gtk_text_buffer_get_iter_at_offset(app_wdgts->textbuffer_main, &iter, -1);
+                    gtk_text_buffer_insert_with_tags_by_name(app_wdgts->textbuffer_main, &iter,
+                                                             complete, -1, "green_bg", NULL, NULL);
                     gtk_entry_set_text(app_wdgts->textentry_main, "");
-                    gtk_text_buffer_insert_at_cursor(app_wdgts->textbuffer_main, "brayan@terminal: ", -1);
+                    gtk_text_buffer_insert_with_tags_by_name(app_wdgts->textbuffer_main, &iter, "brayan@terminal: ", -1, "blue_fg", NULL, NULL);
                 }
             }
             if (!found)
             {
                 add_text(command, " ");
+
                 gtk_text_buffer_insert_at_cursor(app_wdgts->textbuffer_main, command, -1);
-                gtk_text_buffer_insert_at_cursor(app_wdgts->textbuffer_main, "command not found\n", -1);
-                gtk_text_buffer_insert_at_cursor(app_wdgts->textbuffer_main, "brayan@terminal: ", -1);
+                gtk_text_buffer_insert_at_cursor(app_wdgts->textbuffer_main, notFound, -1);
                 gtk_entry_set_text(app_wdgts->textentry_main, "");
+                gtk_text_buffer_get_iter_at_offset(app_wdgts->textbuffer_main, &iter, -1);
+                gtk_text_buffer_insert_with_tags_by_name(app_wdgts->textbuffer_main, &iter, "brayan@terminal: ", -1, "blue_fg", NULL, NULL);
             }
             else
             {
