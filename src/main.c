@@ -9,10 +9,13 @@
 
 int main(int argc, char *argv[])
 {
-    set_username();
     GtkBuilder *builder;
     GtkWidget *window;
     GtkTextIter iter;
+
+    // Init username
+    set_username();
+
     app_widgets *widgets = g_slice_new(app_widgets);
 
     gtk_init(&argc, &argv);
@@ -65,6 +68,31 @@ void set_username()
     strcat(username_c, hostname);
     strcat(username_c, ": ");
 }
+
+void print_console(app_widgets *app_wdgts, char *text)
+{
+    gtk_text_buffer_insert_at_cursor(app_wdgts->textbuffer_main, text, -1);
+}
+
+void print_console_color(app_widgets *app_wdgts, char *text, char *color)
+{
+    GtkTextIter iter;
+    gtk_text_buffer_get_iter_at_offset(app_wdgts->textbuffer_main, &iter, -1);
+    gtk_text_buffer_insert_with_tags_by_name(app_wdgts->textbuffer_main, &iter,
+                                             text, -1, color, NULL, NULL);
+}
+
+void print_username(app_widgets *app_wdgts)
+{
+    GtkTextIter iter;
+    gtk_text_buffer_get_iter_at_offset(app_wdgts->textbuffer_main, &iter, -1);
+    gtk_text_buffer_insert_with_tags_by_name(app_wdgts->textbuffer_main, &iter, username_c, -1, "user_fg", NULL, NULL);
+}
+
+void reset_entry(app_widgets *app_wdgts)
+{
+    gtk_entry_set_text(app_wdgts->textentry_main, "");
+}
 // called when window is closed
 void on_window_main_destroy()
 {
@@ -75,7 +103,6 @@ void on_window_main_destroy()
 void on_textentry_main_key_release_event(GtkWidget *widget, GdkEvent *event, app_widgets *app_wdgts)
 {
     GdkEventKey eventKey;
-    GtkTextIter iter;
     eventKey = event->key;
     int found = 0;
     if (eventKey.keyval == GDK_KEY_Return || eventKey.keyval == GDK_KEY_KP_Enter)
@@ -100,22 +127,18 @@ void on_textentry_main_key_release_event(GtkWidget *widget, GdkEvent *event, app
                     found = 1;
                     add_text(command, "\n");
                     add_text(complete, "\n");
-                    gtk_text_buffer_get_iter_at_offset(app_wdgts->textbuffer_main, &iter, -1);
-                    gtk_text_buffer_insert_with_tags_by_name(app_wdgts->textbuffer_main, &iter,
-                                                             complete, -1, "dir_bg", NULL, NULL);
-                    gtk_entry_set_text(app_wdgts->textentry_main, "");
-                    gtk_text_buffer_insert_with_tags_by_name(app_wdgts->textbuffer_main, &iter, username_c, -1, "user_fg", NULL, NULL);
+                    print_console_color(app_wdgts, complete, "dir_bg");
+                    reset_entry(app_wdgts);
+                    print_username(app_wdgts);
                 }
             }
             if (!found)
             {
                 add_text(command, " ");
-
-                gtk_text_buffer_insert_at_cursor(app_wdgts->textbuffer_main, command, -1);
-                gtk_text_buffer_insert_at_cursor(app_wdgts->textbuffer_main, notFound, -1);
-                gtk_entry_set_text(app_wdgts->textentry_main, "");
-                gtk_text_buffer_get_iter_at_offset(app_wdgts->textbuffer_main, &iter, -1);
-                gtk_text_buffer_insert_with_tags_by_name(app_wdgts->textbuffer_main, &iter, username_c, -1, "user_fg", NULL, NULL);
+                print_console(app_wdgts, command);
+                print_console(app_wdgts, notFound);
+                reset_entry(app_wdgts);
+                print_username(app_wdgts);
             }
             else
             {
