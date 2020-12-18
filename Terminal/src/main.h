@@ -4,8 +4,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include "constant.c"
 #include <stdbool.h>
+
+#include "disk_int.h"
+#include "constant.c"
 // Structures
 
 typedef struct
@@ -35,6 +37,61 @@ int isUserCreated = false;
 char userName[64];
 
 //FILE SYSTEM
+
+/************************** Defining Constants for fs *******************/
+#define LINESIZE 128
+#define DISK_PARTITION 4000000
+#define BLOCK_SIZE 5000
+#define BLOCKS 4000000 / 5000
+#define MAX_STRING_LENGTH 20
+#define MAX_FILE_DATA_BLOCKS (BLOCK_SIZE - 64 * 59) //Hard-coded as of now
+#define MAX_SUBDIRECTORIES (BLOCK_SIZE - 136) / MAX_STRING_LENGTH
+
+char *cmd, *fnm, *fsz;
+char dummy[] = "";
+int n;
+char *a[LINESIZE];
+
+typedef struct
+{
+    char directory[MAX_STRING_LENGTH];
+    int directory_index;
+    char parent[MAX_STRING_LENGTH];
+    int parent_index;
+} working_directory;
+
+typedef struct dir_type
+{
+    char name[MAX_STRING_LENGTH];      //Name of file or dir
+    char top_level[MAX_STRING_LENGTH]; //Name of directory one level up(immediate parent)
+    char (*subitem)[MAX_STRING_LENGTH];
+    bool subitem_type[MAX_SUBDIRECTORIES]; //true if directory, false if file
+    int subitem_count;
+    struct dir_type *next;
+} dir_type;
+
+typedef struct file_type
+{
+    char name[MAX_STRING_LENGTH];      //Name of file or dir
+    char top_level[MAX_STRING_LENGTH]; //Name of directory one level up
+    int data_block_index[MAX_FILE_DATA_BLOCKS];
+    int data_block_count;
+    int size;
+    struct file_type *next;
+} file_type;
+
+typedef struct
+{
+    bool free[BLOCKS];
+    bool directory[BLOCKS];
+    char (*name)[MAX_STRING_LENGTH];
+} descriptor_block;
+
+char *disk;
+working_directory current;
+bool disk_allocated = false; // makes sure that do_root is first thing being called and only called once
+
+/*--------------------------------------------------------------------------------*/
 
 int debug = 0; // extra output; 1 = on, 0 = off
 
@@ -100,57 +157,4 @@ char *get_file_top_level(char *name);
 int get_file_size(char *name);
 void print_file(char *name);
 
-/************************** Defining Constants for fs *******************/
-#define LINESIZE 128
-#define DISK_PARTITION 4000000
-#define BLOCK_SIZE 5000
-#define BLOCKS 4000000 / 5000
-#define MAX_STRING_LENGTH 20
-#define MAX_FILE_DATA_BLOCKS (BLOCK_SIZE - 64 * 59) //Hard-coded as of now
-#define MAX_SUBDIRECTORIES (BLOCK_SIZE - 136) / MAX_STRING_LENGTH
-
-char *cmd, *fnm, *fsz;
-char dummy[] = "";
-int n;
-char *a[LINESIZE];
-
-typedef struct
-{
-    char directory[MAX_STRING_LENGTH];
-    int directory_index;
-    char parent[MAX_STRING_LENGTH];
-    int parent_index;
-} working_directory;
-
-typedef struct dir_type
-{
-    char name[MAX_STRING_LENGTH];      //Name of file or dir
-    char top_level[MAX_STRING_LENGTH]; //Name of directory one level up(immediate parent)
-    char (*subitem)[MAX_STRING_LENGTH];
-    bool subitem_type[MAX_SUBDIRECTORIES]; //true if directory, false if file
-    int subitem_count;
-    struct dir_type *next;
-} dir_type;
-
-typedef struct file_type
-{
-    char name[MAX_STRING_LENGTH];      //Name of file or dir
-    char top_level[MAX_STRING_LENGTH]; //Name of directory one level up
-    int data_block_index[MAX_FILE_DATA_BLOCKS];
-    int data_block_count;
-    int size;
-    struct file_type *next;
-} file_type;
-
-typedef struct
-{
-    bool free[BLOCKS];
-    bool directory[BLOCKS];
-    char (*name)[MAX_STRING_LENGTH];
-} descriptor_block;
-
-char *disk;
-working_directory current;
-bool disk_allocated = false; // makes sure that do_root is first thing being called and only called once
-
-/*--------------------------------------------------------------------------------*/
+void fileSystem(char *in, struct action *ptr);

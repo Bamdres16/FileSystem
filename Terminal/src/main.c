@@ -2,9 +2,25 @@
 
 int main(int argc, char *argv[])
 {
+    int err;
+    char disk_img[] = "disk.img";
 
     GtkBuilder *builder;
     GtkWidget *window;
+
+    // Creation / Initialization of disk file
+    if(access(disk_img, F_OK) == -1 || (argc == 2 && atoi(argv[1]) == 1)) {
+        err = init_fresh_disk(disk_img, BLOCK_SIZE, BLOCKS);
+        disk_allocated = false;
+    } else {
+        err = init_disk(disk_img, BLOCK_SIZE, BLOCKS);
+        disk_allocated = true;
+    }
+
+    if (err != 0) {
+        printf("ERROR: There is a problem with the disk init.\n");
+        exit(1);
+    }
 
     // Init username
 
@@ -43,6 +59,7 @@ int main(int argc, char *argv[])
 
     return 0;
 }
+
 void add_text(char *dest, const char *src)
 {
     char command[256];
@@ -50,6 +67,7 @@ void add_text(char *dest, const char *src)
     strcat(command, src);
     strcpy(dest, command);
 }
+
 // set the user and host name
 void set_username()
 {
@@ -105,12 +123,13 @@ void reset_entry()
 {
     gtk_entry_set_text(widgets->textentry_main, "");
 }
+
 // called when window is closed
 void on_window_main_destroy()
 {
     gtk_main_quit();
 }
-void fileSystem(char *in, struct action *ptr);
+
 // main method, to take the commands
 void on_textentry_main_key_release_event(GtkWidget *widget, GdkEvent *event, app_widgets *app_wdgts)
 {
@@ -217,21 +236,31 @@ int do_root(char *name, char *size)
     print_console("Welcome to your file system\n");
     (void)*name;
     (void)*size;
-    if (disk_allocated == true)
-        return 0;
 
-    //Initialize disk
-    disk = (char *)malloc(DISK_PARTITION);
+    if (disk_allocated != true) {
 
-    //Add descriptor and root directory to disk
-    add_descriptor("descriptor");
-    add_directory("root");
-    //Set up the working_directory structure
-    strcpy(current.directory, "root");
-    current.directory_index = 3;
-    strcpy(current.parent, "");
-    current.parent_index = -1;
-    disk_allocated = true;
+        //Initialize disk
+        // disk = (char *)malloc(DISK_PARTITION);
+        add_descriptor("descriptor");
+
+        //Add descriptor and root directory to disk
+        add_directory("root");
+
+        printf("New disk~\n");
+
+        //Set up the working_directory structure
+        strcpy(current.directory, "root");
+        current.directory_index = 3;
+        strcpy(current.parent, "");
+        current.parent_index = -1;
+        disk_allocated = true;
+    } else {
+        int index = find_block("root", true);
+        strcpy(current.directory, "root");
+        current.directory_index = 3;
+        strcpy(current.parent, "");
+        current.parent_index = -1;
+    }
 
     return 0;
 }
@@ -323,7 +352,7 @@ int do_mkdir(char *name, char *size)
     }
 
     //If it returns 0, there is a subitem with that name already
-    if (get_directory_subitem(current.directory, -1, name) == 0)
+    if ((strcmp(get_directory_subitem(current.directory, -1, name), "0")) == 0)
     {
 
         print_console("mkdir: cannot create directory ");
@@ -392,14 +421,35 @@ int do_rmdir(char *name, char *size)
     //Remove directory from the parent's subitems.
     dir_type *folder = malloc(BLOCK_SIZE);
     int block_index = find_block(name, true);
-    memcpy(folder, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+
+    // memcpy(folder, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+    int err = read_blocks(block_index, 1, folder);
+
+    if (err < 0) {
+        printf("Error: can't read folder\n");
+        return -1;
+    }
 
     dir_type *top_folder = malloc(BLOCK_SIZE);
 
     //The top_level is created based off the folder
     int top_block_index = find_block(folder->top_level, true);
-    memcpy(disk + block_index * BLOCK_SIZE, folder, BLOCK_SIZE);
-    memcpy(top_folder, disk + top_block_index * BLOCK_SIZE, BLOCK_SIZE);
+
+    // memcpy(disk + block_index * BLOCK_SIZE, folder, BLOCK_SIZE);
+    err = write_blocks(block_index, 1, folder);
+
+    if (err < 0) {
+        printf("Error: can't write folder\n");
+        return -1;
+    }
+
+    // memcpy(top_folder, disk + top_block_index * BLOCK_SIZE, BLOCK_SIZE);
+    err = read_blocks(top_block_index, 1, top_folder);
+
+    if (err < 0) {
+        printf("Error: can't read top_folder\n");
+        return -1;
+    }
 
     char subitem_name[MAX_STRING_LENGTH];         // holds the current subitem in the parent directory array
     const int subcnt = top_folder->subitem_count; // no. of subitems
@@ -422,8 +472,16 @@ int do_rmdir(char *name, char *size)
     strcpy(top_folder->subitem[k], "");
 
     top_folder->subitem_count--;
-    memcpy(disk + top_block_index * BLOCK_SIZE, top_folder, BLOCK_SIZE);
+
+    // memcpy(disk + top_block_index * BLOCK_SIZE, top_folder, BLOCK_SIZE);
+    err = write_blocks(top_block_index, 1, top_folder);
+
     free(top_folder);
+
+    if (err < 0) {
+        printf("Error: can't write top_folder\n");
+        return -1;
+    }
 
     //Remove the directory with its contents
 
@@ -579,6 +637,8 @@ int do_exit(char *name, char *size)
 {
     (void)*name;
     (void)*size;
+
+    close_disk();
     // Destroy main window (GTK)
     gtk_main_quit();
     exit(0);
@@ -596,7 +656,16 @@ void printing(char *name)
     dir_type *folder = malloc(BLOCK_SIZE);
     int block_index = find_block(name, true);
 
-    memcpy(folder, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+    // memcpy(folder, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+    int err = read_blocks(block_index, 1, folder);
+
+    if (err < 0) {
+        printf("Error: can't read descriptor\n");
+        return;
+    }
+
+    printf("No poblem finding the block\n");
+
     if (strcmp(current.directory, folder->name) == 0)
     {
         print_console_color("> ", "fil_fg");
@@ -638,7 +707,13 @@ void print_descriptor()
 {
     descriptor_block *descriptor = malloc(BLOCK_SIZE * 2);
 
-    memcpy(descriptor, disk, BLOCK_SIZE * 2);
+    // memcpy(descriptor, disk, BLOCK_SIZE * 2);
+    int err = read_blocks(0, 2, descriptor);
+
+    if (err < 0) {
+        printf("Error: can't read descriptor\n");
+        return;
+    }
 
     printf("Disk Descriptor Free Table:\n");
 
@@ -658,7 +733,13 @@ int allocate_block(char *name, bool directory)
 
     descriptor_block *descriptor = malloc(BLOCK_SIZE * 2);
 
-    memcpy(descriptor, disk, BLOCK_SIZE * 2);
+    // memcpy(descriptor, disk, BLOCK_SIZE * 2);
+    int err = read_blocks(0, 2, descriptor);
+
+    if (err < 0) {
+        printf("Error: can't read descriptor\n");
+        return -1;
+    }
 
     //Goes through every block until free one is found
 
@@ -672,7 +753,13 @@ int allocate_block(char *name, bool directory)
             strcpy(descriptor->name[i], name);
 
             //update descriptor back to the beginning of the disk
-            memcpy(disk, descriptor, BLOCK_SIZE * 2);
+            // memcpy(disk, descriptor, BLOCK_SIZE * 2);
+            err = write_blocks(0, 2, descriptor);
+
+            if (err < 0) {
+                printf("Error: descriptor not write\n");
+                return -1;
+            }
 
             free(descriptor);
             return i;
@@ -689,15 +776,27 @@ void unallocate_block(int offset)
 {
     descriptor_block *descriptor = malloc(BLOCK_SIZE * 2);
 
-    memcpy(descriptor, disk, BLOCK_SIZE * 2);
+    // memcpy(descriptor, disk, BLOCK_SIZE * 2);
+    int err = read_blocks(0, 2, descriptor);
+
+    if (err < 0) {
+        printf("Error: can't read descriptor\n");
+        return;
+    }
 
     //TODO: check if the block holds a file, and then unallocate all its sub-block
     descriptor->free[offset] = true;
     strcpy(descriptor->name[offset], "");
 
-    memcpy(disk, descriptor, BLOCK_SIZE * 2);
+    // memcpy(disk, descriptor, BLOCK_SIZE * 2);
+    err = write_blocks(0, 2, descriptor);
 
     free(descriptor);
+
+    if (err < 0) {
+        printf("Error: can't write descriptor\n");
+        return;
+    } 
 }
 
 /*--------------------------------------------------------------------------------*/
@@ -708,7 +807,13 @@ int find_block(char *name, bool directory)
 
     descriptor_block *descriptor = malloc(BLOCK_SIZE * 2);
 
-    memcpy(descriptor, disk, BLOCK_SIZE * 2);
+    // memcpy(descriptor, disk, BLOCK_SIZE * 2);
+    int err = read_blocks(0, 2, descriptor);
+
+    if (err < 0) {
+        printf("Error: can't read descriptor\n");
+        return -1;
+    }
 
     for (int i = 0; i < BLOCKS; i++)
     {
@@ -735,6 +840,7 @@ int add_descriptor(char *name)
     //Allocate memory to a descriptor_block type so that we start assigning values to its members.
     descriptor_block *descriptor = malloc(BLOCK_SIZE * 2);
 
+    
     //Allocate memory to the array of strings within the descriptor block, which holds the name of each block
     descriptor->name = malloc(sizeof *name * BLOCKS);
 
@@ -757,8 +863,15 @@ int add_descriptor(char *name)
 
     //writing new updated descriptor to the beginning of the disk
     //may encounter error here, to be fixed
-    memcpy(disk, descriptor, (BLOCK_SIZE * (limit + 1)));
 
+    // memcpy(disk, descriptor, (BLOCK_SIZE * (limit + 1)));
+    int err = write_blocks(0, limit + 1, descriptor);
+
+    if (err < 0) {
+        printf("Error: descriptor not added\n");
+        return -1;
+    }
+    
     return 0;
 }
 
@@ -771,7 +884,13 @@ int edit_descriptor(int free_index, bool free, int name_index, char *name)
     descriptor_block *descriptor = malloc(BLOCK_SIZE * 2);
 
     //Copy descriptor on disk to our descriptor_block type,
-    memcpy(descriptor, disk, BLOCK_SIZE * 2);
+    // memcpy(descriptor, disk, BLOCK_SIZE * 2);
+    int err = read_blocks(0, 2, descriptor);
+
+    if (err < 0) {
+        printf("Error: can't read descriptor\n");
+        return -1;
+    }
 
     //Each array in the descriptor block will be updated
     if (free_index > 0)
@@ -784,7 +903,13 @@ int edit_descriptor(int free_index, bool free, int name_index, char *name)
     }
 
     // write the new updated descriptor back to the beginning of the disk
-    memcpy(disk, descriptor, BLOCK_SIZE * 2);
+    // memcpy(disk, descriptor, BLOCK_SIZE * 2);
+    err = write_blocks(0, 2, descriptor);
+
+    if (err < 0) {
+        printf("Error: can't write descriptor\n");
+        return -1;
+    }
 
     return 0;
 }
@@ -796,12 +921,24 @@ int edit_descriptor_name(int index, char *new_name)
 {
     descriptor_block *descriptor = malloc(BLOCK_SIZE * 2);
 
-    memcpy(descriptor, disk, BLOCK_SIZE * 2);
+    // memcpy(descriptor, disk, BLOCK_SIZE * 2);
+    int err = read_blocks(0, 2, descriptor);
+
+    if (err < 0) {
+        printf("Error: can't read descriptor\n");
+        return -1;
+    }
 
     // Change the name of the file at index to the new_name
     strcpy(descriptor->name[index], new_name);
 
-    memcpy(disk, descriptor, BLOCK_SIZE * 2);
+    // memcpy(disk, descriptor, BLOCK_SIZE * 2);
+    err = write_blocks(0, 2, descriptor);
+
+    if (err < 0) {
+        printf("Error: can't write descriptor\n");
+        return -1;
+    }
 
     free(descriptor);
     return 0;
@@ -831,7 +968,13 @@ int add_directory(char *name)
     int index = allocate_block(name, true);
 
     //Copy our folder to the disk
-    memcpy(disk + index * BLOCK_SIZE, folder, BLOCK_SIZE);
+    // memcpy(disk + index * BLOCK_SIZE, folder, BLOCK_SIZE);
+    int err = write_blocks(index, 1, folder);
+
+    if (err < 0) {
+        printf("Error: directory not added\n");
+        return -1;
+    }
 
     free(folder);
     return 0;
@@ -852,7 +995,13 @@ int remove_directory(char *name)
         return -1;
     }
 
-    memcpy(folder, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+    // memcpy(folder, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+    int err = read_blocks(block_index, 1, folder);
+
+    if (err < 0) {
+        printf("Error: can't read folder\n");
+        return -1;
+    }
 
     //Go through again if there is a subdirectory ==> as implemented in Unix
     for (int i = 0; i < folder->subitem_count; i++)
@@ -895,7 +1044,13 @@ int edit_directory(char *name, char *subitem_name, char *new_name, bool name_cha
         return -1;
     }
 
-    memcpy(folder, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+    // memcpy(folder, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+    int err = read_blocks(block_index, 1, folder);
+
+    if (err < 0) {
+        printf("Error: can't read folder\n");
+        return -1;
+    }
 
     if (strcmp(subitem_name, "") != 0)
     { //Case that we are adding subitem to the descriptor block
@@ -907,9 +1062,16 @@ int edit_directory(char *name, char *subitem_name, char *new_name, bool name_cha
             folder->subitem_count++;
 
             //update the disk too!
-            memcpy(disk + block_index * BLOCK_SIZE, folder, BLOCK_SIZE);
+            // memcpy(disk + block_index * BLOCK_SIZE, folder, BLOCK_SIZE);
+            err = write_blocks(block_index, 1, folder);
 
             free(folder);
+
+            if (err < 0) {
+                printf("Error: can't write folder\n");
+                return -1;
+            }
+
             return 0;
         }
         else
@@ -919,8 +1081,16 @@ int edit_directory(char *name, char *subitem_name, char *new_name, bool name_cha
                 if (strcmp(folder->subitem[i], subitem_name) == 0)
                 {
                     strcpy(folder->subitem[i], new_name);
-                    memcpy(disk + block_index * BLOCK_SIZE, folder, BLOCK_SIZE);
+                    // memcpy(disk + block_index * BLOCK_SIZE, folder, BLOCK_SIZE);
+                    err = write_blocks(block_index, 1, folder);
+
                     free(folder);
+
+                    if (err < 0) {
+                        printf("Error: can't write folder\n");
+                        return -1;
+                    }
+                    
                     return 0;
                 }
             }
@@ -941,7 +1111,13 @@ int edit_directory(char *name, char *subitem_name, char *new_name, bool name_cha
 
         strcpy(folder->name, new_name);
 
-        memcpy(disk + block_index * BLOCK_SIZE, folder, BLOCK_SIZE);
+        // memcpy(disk + block_index * BLOCK_SIZE, folder, BLOCK_SIZE);
+        err = write_blocks(block_index, 1, folder);
+
+        if (err < 0) {
+            printf("Error: can't write folder\n");
+            return -1;
+        }
 
         //edit descriptors
         edit_descriptor(-1, false, block_index, new_name);
@@ -961,20 +1137,49 @@ int edit_directory(char *name, char *subitem_name, char *new_name, bool name_cha
             if (folder->subitem_type[i])
             {
                 //if type == folder
-                memcpy(child_folder, disk + child_index * BLOCK_SIZE, BLOCK_SIZE);
+                // memcpy(child_folder, disk + child_index * BLOCK_SIZE, BLOCK_SIZE);
+                err = read_blocks(child_index, 1, child_folder);
+
+                if (err < 0) {
+                    printf("Error: can't read child_folder\n");
+                    return -1;
+                }
+
+
                 strcpy(child_folder->top_level, new_name);
 
-                memcpy(disk + child_index * BLOCK_SIZE, child_folder, BLOCK_SIZE);
+                // memcpy(disk + child_index * BLOCK_SIZE, child_folder, BLOCK_SIZE);
+                err = write_blocks(child_index, 1, child_folder);
+
+                if (err < 0) {
+                    printf("Error: can't write child_folder\n");
+                    return -1;
+                }
+
                 free(child_folder);
                 free(child_file);
             }
             else
             {
                 //if type == file
-                memcpy(child_file, disk + child_index * BLOCK_SIZE, BLOCK_SIZE);
+                // memcpy(child_file, disk + child_index * BLOCK_SIZE, BLOCK_SIZE);
+                err = read_blocks(child_index, 1, child_file);
+
+                if (err < 0) {
+                    printf("Error: can't read child_file\n");
+                    return -1;
+                }
+
                 strcpy(child_file->top_level, new_name);
 
-                memcpy(disk + child_index * BLOCK_SIZE, child_file, BLOCK_SIZE);
+                // memcpy(disk + child_index * BLOCK_SIZE, child_file, BLOCK_SIZE);
+                err = write_blocks(child_index, 1, child_file);
+
+                if (err < 0) {
+                    printf("Error: can't write child_file\n");
+                    return -1;
+                }
+
                 free(child_folder);
                 free(child_file);
             }
@@ -1021,7 +1226,13 @@ int add_file(char *name, int size)
         file->data_block_count++;
     }
     //data blocks in memory not copied to disk
-    memcpy(disk + index * BLOCK_SIZE, file, BLOCK_SIZE);
+    // memcpy(disk + index * BLOCK_SIZE, file, BLOCK_SIZE);
+    int err = write_blocks(index, 1, file);
+
+    if (err < 0) {
+        printf("Error: can't write file\n");
+        return -1;
+    }
 
     free(file);
     return 0;
@@ -1048,12 +1259,24 @@ int remove_file(char *name)
         return -1;
     }
 
-    memcpy(file, disk + file_index * BLOCK_SIZE, BLOCK_SIZE);
+    // memcpy(file, disk + file_index * BLOCK_SIZE, BLOCK_SIZE);
+    int err = read_blocks(file_index, 1, file);
+
+    if (err < 0) {
+        printf("Error: can't read file\n");
+        return -1;
+    }
 
     //Find the top_level folder on disk
     int folder_index = find_block(file->top_level, true);
 
-    memcpy(folder, disk + folder_index * BLOCK_SIZE, BLOCK_SIZE);
+    // memcpy(folder, disk + folder_index * BLOCK_SIZE, BLOCK_SIZE);
+    err = read_blocks(folder_index, 1, folder);
+
+    if (err < 0) {
+        printf("Error: can't read folder\n");
+        return -1;
+    }
 
     // Go through the parent directory's subitem array and remove our file
     char subitem_name[MAX_STRING_LENGTH];
@@ -1073,7 +1296,13 @@ int remove_file(char *name)
     strcpy(folder->subitem[k], "");
     folder->subitem_count--;
 
-    memcpy(disk + folder_index * BLOCK_SIZE, folder, BLOCK_SIZE); // Update the folder in memory
+    // memcpy(disk + folder_index * BLOCK_SIZE, folder, BLOCK_SIZE); // Update the folder in memory
+    err = write_blocks(folder_index, 1, folder);
+
+    if (err < 0) {
+        printf("Error: can't write folder\n");
+        return -1;
+    }
 
     //Imp :  Unallocate all of the data blocks from the file that we are deleting
     int i = 0;
@@ -1105,7 +1334,13 @@ int edit_file(char *name, int size, char *new_name)
         return -1;
     }
 
-    memcpy(file, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+    // memcpy(file, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+    int err = read_blocks(block_index, 1, file);
+
+    if (err < 0) {
+        printf("Error: can't read file\n");
+        return -1;
+    }
 
     if (size > 0)
     {
@@ -1127,9 +1362,17 @@ int edit_file(char *name, int size, char *new_name)
         edit_descriptor_name(block_index, new_name);
 
         strcpy(file->name, new_name);
-        memcpy(disk + block_index * BLOCK_SIZE, file, BLOCK_SIZE);
+
+        // memcpy(disk + block_index * BLOCK_SIZE, file, BLOCK_SIZE);
+        err = write_blocks(block_index, 1, file);
 
         free(file);
+
+        if (err < 0) {
+            printf("Error: can't write file\n");
+            return -1;
+        }
+
         return 0;
     }
 }
@@ -1151,7 +1394,13 @@ char *get_directory_name(char *name)
         return tmp;
     }
 
-    memcpy(folder, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+    // memcpy(folder, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+    int err = read_blocks(block_index, 1, folder);
+
+    if (err < 0) {
+        printf("Error: can't read folder\n");
+        return "-1";
+    }
 
     strcpy(tmp, folder->name);
     free(folder);
@@ -1173,7 +1422,13 @@ char *get_directory_top_level(char *name)
         return tmp;
     }
 
-    memcpy(folder, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+    // memcpy(folder, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+    int err = read_blocks(block_index, 1, folder);
+
+    if (err < 0) {
+        printf("Error: can't read folder\n");
+        return "-1";
+    }
 
     strcpy(tmp, folder->top_level);
     free(folder);
@@ -1194,7 +1449,13 @@ char *get_directory_subitem(char *name, int subitem_index, char *subitem_name)
         return tmp;
     }
 
-    memcpy(folder, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+    // memcpy(folder, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+    int err = read_blocks(block_index, 1, folder);
+
+    if (err < 0) {
+        printf("Error: can't read folder\n");
+        return "-1";
+    }
 
     if (subitem_index >= 0)
     {
@@ -1233,7 +1494,13 @@ int edit_directory_subitem(char *name, char *sub_name, char *new_sub_name)
     {
     }
 
-    memcpy(folder, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+    // memcpy(folder, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+    int err = read_blocks(block_index, 1, folder);
+
+    if (err < 0) {
+        printf("Error: can't read folder\n");
+        return -1;
+    }
 
     const int cnt = folder->subitem_count;
     int i;
@@ -1242,8 +1509,16 @@ int edit_directory_subitem(char *name, char *sub_name, char *new_sub_name)
         if (strcmp(folder->subitem[i], sub_name) == 0)
         {
             strcpy(folder->subitem[i], new_sub_name);
-            memcpy(disk + block_index * BLOCK_SIZE, folder, BLOCK_SIZE);
+
+            // memcpy(disk + block_index * BLOCK_SIZE, folder, BLOCK_SIZE);
+            err = write_blocks(block_index, 1, folder);
+
             free(folder);
+
+            if (err < 0) {
+                printf("Error: can't write folder\n");
+                return -1;
+            }
             return i;
         }
     }
@@ -1266,7 +1541,13 @@ int get_directory_subitem_count(char *name)
         return -1;
     }
 
-    memcpy(folder, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+    // memcpy(folder, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+    int err = read_blocks(block_index, 1, folder);
+
+    if (err < 0) {
+        printf("Error: can't read folder\n");
+        return -1;
+    }
 
     tmp = folder->subitem_count;
     free(folder);
@@ -1288,7 +1569,13 @@ char *get_file_name(char *name)
         return tmp;
     }
 
-    memcpy(file, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+    // memcpy(file, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+    int err = read_blocks(block_index, 1, file);
+
+    if (err < 0) {
+        printf("Error: can't read file\n");
+        return "-1";
+    }
 
     strcpy(tmp, file->name);
     free(file);
@@ -1309,7 +1596,13 @@ char *get_file_top_level(char *name)
         return tmp;
     }
 
-    memcpy(file, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+    // memcpy(file, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+    int err = read_blocks(block_index, 1, file);
+
+    if (err < 0) {
+        printf("Error: can't read file\n");
+        return "-1";
+    }
 
     strcpy(tmp, file->top_level);
     free(file);
@@ -1330,7 +1623,13 @@ int get_file_size(char *name)
         return -1;
     }
 
-    memcpy(file, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+    // memcpy(file, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+    int err = read_blocks(block_index, 1, file);
+
+    if (err < 0) {
+        printf("Error: can't read file\n");
+        return -1;
+    }
 
     tmp = file->size;
     free(file);
@@ -1344,7 +1643,14 @@ void print_directory(char *name)
 {
     dir_type *folder = malloc(BLOCK_SIZE);
     int block_index = find_block(name, true);
-    memcpy(folder, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+
+    // memcpy(folder, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+    int err = read_blocks(block_index, 1, folder);
+
+    if (err < 0) {
+        printf("Error: can't read folder\n");
+        return;
+    }
 
     printf("	-----------------------------\n");
     printf("	New Folder Attributes:\n\n\tname = %s\n\ttop_level = %s\n\tsubitems = ", folder->name, folder->top_level);
@@ -1362,7 +1668,14 @@ void print_file(char *name)
 {
     file_type *file = malloc(BLOCK_SIZE);
     int block_index = find_block(name, false);
-    memcpy(file, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+
+    // memcpy(file, disk + block_index * BLOCK_SIZE, BLOCK_SIZE);
+    int err = read_blocks(block_index, 1, file);
+
+    if (err < 0) {
+        printf("Error: can't read file\n");
+        return;
+    }
 
     printf("	-----------------------------\n");
     printf("	New File Attributes:\n\n\tname = %s\n\ttop_level = %s\n\tfile size = %d\n\tblock count = %d\n", file->name, file->top_level, file->size, file->data_block_count);

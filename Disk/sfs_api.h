@@ -1,7 +1,7 @@
 #ifndef SFS_API_H
 #define SFS_API_H
 
-#include "disk_emu.h"
+#include "disk_int.h"
 #include "sfs_header.h"
 
 DirectoryDescriptor root;

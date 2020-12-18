@@ -1,3 +1,4 @@
+
 #ifndef SFS_API_UTIL
 #define SFS_API_UTIL
 
