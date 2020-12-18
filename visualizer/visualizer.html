@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+    <meta name="viewport" charset="UTF-8" content="width=device-width" />
+    <title>Visualizador</title>
+    <style id="myStyles">
+        html, body {
+    margin: 0px;
+    padding: 0px;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+#tree {
+    width: 100%;
+    height: 100%;
+}
+
+    </style>
+
+</head>
+<body>
+    
+<script src="https://balkangraph.com/js/latest/OrgChart.js"></script>
+<script type="text/javascript" src="fileData.json"></script>
+
+<div id="tree"></div>
+    <script>
+    var chart = new OrgChart(document.getElementById("tree"), {
+        nodeBinding: {
+            field_0: "name"
+        },
+        nodes: nodes
+    });
+
+    </script>
+</body>
+</html>
